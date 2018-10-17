@@ -3,6 +3,7 @@
 import RPi.GPIO as GPIO
 import time
 import bluetooth
+import platform
 from time import sleep
 from datetime import datetime
 from weasyprint import HTML, CSS
@@ -77,21 +78,24 @@ def headerRelatorio():
 	
 	relatorio = ""
 	date = getDate()
+	iden = getIdentificacao()
 	relatorio += 'Relatorio_' + str(date['dia']) + '-' + str(date['mes']) + '-' + str(date['ano']) + '_'
-	relatorio += str(date['hora']) + '-' + str(date['minuto'])
+	relatorio += str(date['hora']) + '-' + str(date['minuto']) + '-' + str(date['segundo']) + '_'
+	relatorio += iden
 	
 	return relatorio
 	
 def getDate():
 	date = datetime.now()
 	dateTime = {
-		'dia'    : date.strftime("%d"),
-		'mes'    : date.strftime("%m"),
-		'ano'    : date.strftime("%Y"),
-		'hora'   : date.strftime("%H"),
-		'minuto' : date.strftime("%M"),
-		'dt'     : date.strftime("%d/%m/%Y"),
-                'ht'     : date.strftime("%H:%M:%S")
+		'dia'     : date.strftime("%d"),
+		'mes'     : date.strftime("%m"),
+		'ano'     : date.strftime("%Y"),
+		'hora'    : date.strftime("%H"),
+		'minuto'  : date.strftime("%M"),
+        'segundo' : date.strftime("%S"),
+		'dt'      : date.strftime("%d/%m/%Y"),
+        'ht'      : date.strftime("%H:%M:%S")
 	}
 	
 	return dateTime
@@ -168,7 +172,9 @@ def numeracao():
 
         return novo_numero
 
-
+def getIdentificacao():
+        nome = platform.node()
+        return nome
 
 flag = 0
 
@@ -177,133 +183,127 @@ flag = 0
 
 def main():
         
-        servo = configServo()
+	servo = configServo()
 
-        pwm = configPinoGpio(servo['pino'],servo['frequencia'], 1)
-        pwm.start(0)
+	pwm = configPinoGpio(servo['pino'],servo['frequencia'], 1)
+	pwm.start(0)
 
-        pulso = calcularPulso(servo['frequencia'], servo['pulso_0'], servo['pulso_180'])
+	pulso = calcularPulso(servo['frequencia'], servo['pulso_0'], servo['pulso_180'])
+	
+	dados = ""
 
-        dados = ""
-
-        html = '''
+	html = '''
         <table id="tabela">
-                <tbody>
+            <tbody>
                 <tr class="cabecalho1" style="background: #f46242;height:40px;width: 100%">
-                        <td colspan="2">Identificação:
+                    <td colspan="2">Identificação:&nbsp;
         '''
-        dadosDin = ""
+	dadosDin = ""
+	
+	flag = 0
 
-        flag = 0
+	qtd_registros = 0
 
-        sock = conectar()
+	sock = conectar()
 
-        while 1:
+	while 1:
 
-                try:
-                        #Recebe os dados do sensor de temperatura
-                        
-                        dados += sock.recv(1024).decode()
-                        data_end = dados.find('\n')
-                        
+		try:
+			dados += sock.recv(1024).decode()
+			data_end = dados.find('\n')
 
-                        if (data_end != -1):
+			if (data_end != -1):
                                                 
-                                temp        = dados.split()
-                                temperatura = float(temp[2])
-                                
-                                print (dados)
+				temp        = dados.split()
+				temperatura = float(temp[2])
+				
+				print (dados)
 
-                                dt = getDate()
+				dt = getDate()
+				
+				flag += 1
                                 
-                                flag += 1
-                                
-                                if flag == 1:
-                                        
-                                        tempoAnterior = dt['minuto']
-                                        
-                                        relatorio = headerRelatorio()
+				if flag == 1:
+					relatorio = headerRelatorio()
 
-                                dadosDin += '<tr><td>' + str(dt['dt']) + '</td>'
-                                dadosDin += '<td>' + str(dt['ht']) + '</td>'
-                                dadosDin += '<td>' + str(temp[2]) + '</td>'
-                                dadosDin += '<td>' + str(temp[6]) + '</td>'
-                                dadosDin += '<td>' + str(temp[10]) + '</td></tr>'
-                                                                                
-                                        
-                                tempoAtual = dt['minuto']
-                                
-                                if tempoAtual != tempoAnterior:
+				dadosDin += '<tr><td>' + str(dt['dt']) + '</td>'
+				dadosDin += '<td>' + str(dt['ht']) + '</td>'
+				dadosDin += '<td>' + str(temp[2]) + '</td>'
+				dadosDin += '<td>' + str(temp[6]) + '</td>'
+				dadosDin += '<td>' + str(temp[10]) + '</td></tr>'
 
-                                        identificacao = ' secador_01'
-                                        n_relatorio = numeracao()
+				qtd_registros += 1                                              
+                                        
+				if qtd_registros == 30:
 
-                                        html += identificacao
-                                        html += '</td><td colspan="2">Relatório: nº'
-                                        html += n_relatorio
-                                        html += '</td><td>Data:'
-                                        html += str(dt['dt'])
-                                        html += '''
-                                        </td>     
-                                        </tr><tr class="cabecalho2">
-                                                <td>Data</td>
-                                                <td>Horário</td>
-                                                <td>°C</td>
-                                                <td>Máx. °C</td>
-                                                <td>Min. °C</td>
-                                        </tr>
-                                        '''
-                                        html += dadosDin
-                                        html += '''
-                                                        </tbody>
-                                                </table>
-                                                <div class="row" style="text-align: right;font-size: 11px; ">
-                                                        <p><i><u>ReportTemperature version:1.0.1</u></i></p>
-                                                </div>
-                                        '''
+					identificacao = getIdentificacao()
+					n_relatorio = numeracao()
 
-                                        if geraRelatorio(html,relatorio):
-                                                print ('Falhou')
-                                        else:
-                                                print ('Sucesso')
-                                        
+					html += identificacao
+					html += '</td><td colspan="2">Relatório: nº'
+					html += n_relatorio
+					html += '</td><td>Data:'
+					html += str(dt['dt'])
+					html += '''
+					</td>     
+					</tr><tr class="cabecalho2">
+							<td>Data</td>
+							<td>Horário</td>
+							<td>°C</td>
+							<td>Máx. °C</td>
+							<td>Min. °C</td>
+					</tr>
+					'''
+					html += dadosDin
+					html += '''
+								</tbody>
+						</table>
+						<div class="row" style="text-align: right;font-size: 11px; ">
+								<p><i><u>ReportTemperature version:1.0.1</u></i></p>
+						</div>
+					'''
 
-                                        html = ""
-                                        dadosDin = ""
+					if geraRelatorio(html,relatorio):
+							print ('Falhou')
+					else:
+							print ('Sucesso')
+					
 
-                                        html = '''
-                                        <table id="tabela">
-                                                <tbody>
-                                                <tr class="cabecalho1" style="background: #f46242;height:40px;width: 100%">
-                                                        <td colspan="2">Identificação:
-                                        '''
-                                        
-                                        relatorio = headerRelatorio()
-                                        tempoAnterior = tempoAtual
+					html = ""
+					dadosDin = ""
+
+					html = '''
+					<table id="tabela">
+							<tbody>
+							<tr class="cabecalho1" style="background: #f46242;height:40px;width: 100%">
+									<td colspan="2">Identificação:&nbsp;
+					'''
+					
+					relatorio = headerRelatorio()
+					qtd_registros = 0
                                 
-                                if temperatura > 26:
+				if temperatura > 26:
+						
+					set_angulo(pwm, 15, pulso['taxa_0'], pulso['taxa_range'])
+					#while dec_angulo > 15:
+						#     set_angulo(pwm, 15, pulso['taxa_0'], pulso['taxa_range'])
+						#    dec_angulo = dec_angulo-15
+						#   sleep(1.5)
+				
+				else:
+					set_angulo(pwm, 90, pulso['taxa_0'], pulso['taxa_range'])
                                         
-                                        set_angulo(pwm, 15, pulso['taxa_0'], pulso['taxa_range'])
-                                        #while dec_angulo > 15:
-                                         #     set_angulo(pwm, 15, pulso['taxa_0'], pulso['taxa_range'])
-                                          #    dec_angulo = dec_angulo-15
-                                           #   sleep(1.5)
+			dados = dados[data_end+1:]
                                 
-                                else:
-                                        
-                                        set_angulo(pwm, 90, pulso['taxa_0'], pulso['taxa_range'])
-                                        
-                                
-                                dados = dados[data_end+1:]
-                                
-                except KeyboardInterrupt:
+		except KeyboardInterrupt:
                         
-                        pwm.stop()
-                        configPinoGpio(servo['pino'], servo['frequencia'], 0)
-                        sock.close()
-                        
-                        break
+			print("Encerrando...")
+			pwm.stop()
+			configPinoGpio(servo['pino'], servo['frequencia'], 0)
+			sock.close()
+			sleep(5)
+			
+			break
 	
 if __name__== "__main__":
-        main()
-
+    main()
