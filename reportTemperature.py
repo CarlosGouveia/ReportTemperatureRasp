@@ -1,11 +1,19 @@
 #!/usr/bin/env python3
+<<<<<<< HEAD
 
 import RPi.GPIO as GPIO
 import time
+=======
+#-*-coding:utf-8-*-
+import RPi.GPIO as GPIO
+import time
+import bluetooth
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
 import platform
 from time import sleep
 from datetime import datetime
 from weasyprint import HTML, CSS
+<<<<<<< HEAD
 import socket
 import Adafruit_CharLCD as LCD
 
@@ -48,6 +56,26 @@ def conectar(lcd):
 			cont += 1
 
 			continue
+=======
+
+def conectar():
+
+        while True:
+                
+                print ("Tentando conectar...")
+                
+                try:
+                        
+                        bd_addr  = "B4:E6:2D:99:76:AB"
+                        port     = 2
+                        sock     = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+                        sock.connect((bd_addr,port))
+
+                        print ("Conectado!")
+                        return sock
+                except:
+                        continue
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
 
 def configPinoGpio(pino_servo, frequencia, status):
 	
@@ -134,15 +162,25 @@ def getDate():
 		'ano'     : date.strftime("%Y"),
 		'hora'    : date.strftime("%H"),
 		'minuto'  : date.strftime("%M"),
+<<<<<<< HEAD
         	'segundo' : date.strftime("%S"),
 		'dt'      : date.strftime("%d/%m/%Y"),
         	'ht'      : date.strftime("%H:%M:%S")
+=======
+        'segundo' : date.strftime("%S"),
+		'dt'      : date.strftime("%d/%m/%Y"),
+        'ht'      : date.strftime("%H:%M:%S")
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
 	}
 	
 	return dateTime
 
 def geraRelatorio(html,name):
+<<<<<<< HEAD
         pdf = HTML(string=html)
+=======
+        pdf = HTML(string=html.encode('utf-8'))
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
         relatorio = 'Relatorios/' + name + '.pdf'
         result = pdf.write_pdf(relatorio, stylesheets=[CSS(string='''
         @page{
@@ -221,6 +259,7 @@ flag = 0
 
 #-------------------------------------------------------------------------------#
 
+<<<<<<< HEAD
 def main():
         
 	servo = configServo()
@@ -270,6 +309,49 @@ def main():
 				lcd.clear()
 				lcd.message("   TEMPERATURA \n" + str(round(temperatura,2)) + "C " + str(dt['ht']))
 
+=======
+
+def main():
+        
+	servo = configServo()
+
+	pwm = configPinoGpio(servo['pino'],servo['frequencia'], 1)
+	pwm.start(0)
+
+	pulso = calcularPulso(servo['frequencia'], servo['pulso_0'], servo['pulso_180'])
+	
+	dados = ""
+
+	html = '''
+        <table id="tabela">
+            <tbody>
+                <tr class="cabecalho1" style="background: #f46242;height:40px;width: 100%">
+                    <td colspan="2">Identificação:&nbsp;
+        '''
+	dadosDin = ""
+	
+	flag = 0
+
+	qtd_registros = 0
+
+	sock = conectar()
+
+	while 1:
+
+		try:
+			dados += sock.recv(1024).decode()
+			data_end = dados.find('\n')
+
+			if (data_end != -1):
+                                                
+				temp        = dados.split()
+				temperatura = float(temp[2])
+				
+				print (dados)
+
+				dt = getDate()
+				
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
 				flag += 1
                                 
 				if flag == 1:
@@ -277,9 +359,15 @@ def main():
 
 				dadosDin += '<tr><td>' + str(dt['dt']) + '</td>'
 				dadosDin += '<td>' + str(dt['ht']) + '</td>'
+<<<<<<< HEAD
 				dadosDin += '<td>' + str(temp[0]) + '</td>'
 				dadosDin += '<td>' + str(temp[1]) + '</td>'
 				dadosDin += '<td>' + str(temp[2]) + '</td></tr>'
+=======
+				dadosDin += '<td>' + str(temp[2]) + '</td>'
+				dadosDin += '<td>' + str(temp[6]) + '</td>'
+				dadosDin += '<td>' + str(temp[10]) + '</td></tr>'
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
 
 				qtd_registros += 1                                              
                                         
@@ -305,10 +393,17 @@ def main():
 					'''
 					html += dadosDin
 					html += '''
+<<<<<<< HEAD
 						</tbody>
 						</table>
 						<div class="row" style="text-align: right;font-size: 11px; ">
 							<p><i><u>ReportTemperature version:1.0.1</u></i></p>
+=======
+								</tbody>
+						</table>
+						<div class="row" style="text-align: right;font-size: 11px; ">
+								<p><i><u>ReportTemperature version:1.0.1</u></i></p>
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
 						</div>
 					'''
 
@@ -317,6 +412,10 @@ def main():
 					else:
 							print ('Sucesso')
 					
+<<<<<<< HEAD
+=======
+
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
 					html = ""
 					dadosDin = ""
 
@@ -341,6 +440,7 @@ def main():
 				else:
 					set_angulo(pwm, 90, pulso['taxa_0'], pulso['taxa_range'])
                                         
+<<<<<<< HEAD
 			sleep(5)
                                 
 		except KeyboardInterrupt:
@@ -352,8 +452,23 @@ def main():
 			sleep(5)
 			lcd.clear()
 			configPinoGpio(servo['pino'], servo['frequencia'], 0)
+=======
+			dados = dados[data_end+1:]
+                                
+		except KeyboardInterrupt:
+                        
+			print("Encerrando...")
+			pwm.stop()
+			configPinoGpio(servo['pino'], servo['frequencia'], 0)
+			sock.close()
+			sleep(5)
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
 			
 			break
 	
 if __name__== "__main__":
+<<<<<<< HEAD
     main()
+=======
+    main()
+>>>>>>> 55cca8524c9195c0322f4022bae795eb8aab4aaf
