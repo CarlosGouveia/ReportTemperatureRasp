@@ -1,16 +1,53 @@
-#-*-coding:utf-8-*-
+#!/usr/bin/env python3
+
 import RPi.GPIO as GPIO
 import time
-import bluetooth
-import Adafruit_CharLCD as LCD
-import json
+import platform
 from time import sleep
 from datetime import datetime
+from weasyprint import HTML, CSS
+import socket
+import Adafruit_CharLCD as LCD
 
-bd_addr = "98:D3:31:40:14:9F" 
-port    = 1
-sock    = bluetooth.BluetoothSocket (bluetooth.RFCOMM)
-sock.connect((bd_addr,port))
+def conectar(lcd):
+        
+	sock = socket.socket()
+
+	host = "192.168.42.70"
+	port = 80  
+	
+	mensagem = {
+		'0' : "   CONECTADO!   ",
+		'1' : " AGUARDANDO\n     CONEXAO.",
+		'2' : " AGUARDANDO\n     CONEXAO..",
+		'3' : " AGUARDANDO\n     CONEXAO..."
+	}
+
+	cont = 1
+	while True:
+
+		try:
+			sock.connect((host, port))
+
+			print ("Conectado!")
+			cont = 0
+			lcd.clear()
+			lcd.message(mensagem[str(cont)])
+			print(mensagem[str(cont)])
+
+			return sock
+			
+		except:
+			print ("Tentando conectar...")
+			lcd.clear()
+			lcd.message(mensagem[str(cont)])
+			print(mensagem[str(cont)])
+
+			if cont == 3:
+				cont = 0
+			cont += 1
+
+			continue
 
 def configPinoGpio(pino_servo, frequencia, status):
 	
@@ -26,7 +63,27 @@ def configPinoGpio(pino_servo, frequencia, status):
 		
 		GPIO.cleanup()
 		return
+
+def inicializaLCD():
+	# Pinos LCD x Raspberry (GPIO)
+	lcd_rs        = 18
+	lcd_en        = 23
+	lcd_d4        = 12
+	lcd_d5        = 16
+	lcd_d6        = 20
+	lcd_d7        = 21
+	lcd_backlight = 4
+
+	# Define numero de colunas e linhas do LCD
+	lcd_colunas = 16
+	lcd_linhas  = 2
+
+	# Inicializa o LCD nos pinos configurados acima
+	lcd = LCD.Adafruit_CharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5,
+				lcd_d6, lcd_d7, lcd_colunas, lcd_linhas,
+				lcd_backlight)
 	
+	return lcd
 
 def configServo():
 	
@@ -39,7 +96,6 @@ def configServo():
 		
 	return listaConfigServo
 	
-
 def calcularPulso(frequencia, pulso_0, pulso_180):
 	
 	periodo     = 1000/frequencia
@@ -59,118 +115,245 @@ def set_angulo(pwm, angulo, taxa_0, taxa_range):
 	taxa = taxa_0 + (angulo/180.0)* taxa_range
 	pwm.ChangeDutyCycle(taxa)
 	
-
 def headerRelatorio():
 	
 	relatorio = ""
 	date = getDate()
+	iden = getIdentificacao()
 	relatorio += 'Relatorio_' + str(date['dia']) + '-' + str(date['mes']) + '-' + str(date['ano']) + '_'
-	relatorio += str(date['hora']) + '-' + str(date['minuto']) + '\n'
+	relatorio += str(date['hora']) + '-' + str(date['minuto']) + '-' + str(date['segundo']) + '_'
+	relatorio += iden
 	
 	return relatorio
 	
 def getDate():
 	date = datetime.now()
 	dateTime = {
-		'dia'    : date.strftime("%d"),
-		'mes'    : date.strftime("%m"),
-		'ano'    : date.strftime("%Y"),
-		'hora'   : date.strftime("%H"),
-		'minuto' : date.strftime("%M"),
-		'dt'     : date.strftime("%d/%m/%Y %H:%M")
+		'dia'     : date.strftime("%d"),
+		'mes'     : date.strftime("%m"),
+		'ano'     : date.strftime("%Y"),
+		'hora'    : date.strftime("%H"),
+		'minuto'  : date.strftime("%M"),
+        	'segundo' : date.strftime("%S"),
+		'dt'      : date.strftime("%d/%m/%Y"),
+        	'ht'      : date.strftime("%H:%M:%S")
 	}
 	
 	return dateTime
 
+def geraRelatorio(html,name):
+        pdf = HTML(string=html)
+        relatorio = 'Relatorios/' + name + '.pdf'
+        result = pdf.write_pdf(relatorio, stylesheets=[CSS(string='''
+        @page{
+                size: A4;
+                margin: 1cm;
+        } 
+        *{
+                font-family:Verdana;       
+        }
+        #tabela{
+                width:100%;
+                border:solid 1px;
+                text-align: center;
+                border-collapse:collapse;
+        }     
+        #tabela tr{
+                height:20px;
+        }
+        #tabela tr td:first-child, #tabela tr td:last-child{
+                width:150px;
+        }
+        #tabela tbody tr:nth-child(odd){
+                background: #d6d8d8;
+        }
+        #tabela .cabecalho1{
+                text-align: left;
+                font-weight: bold;
+                font-size: 14px;
+                color: #ffffff;
+        }
+        #tabela .cabecalho2{
+                text-align: center;
+                font-weight: bold;
+                background:#747777;
+                color: #ffffff;
+                height:30px; 
+                width: 33%;
+        } 
+        '''
+        )])
+
+        return result
+
+def numeracao():
+        arquivo = open("numeracao.txt","r")
+        lista_aux  = arquivo.readlines()
+        arquivo.close()
+        lista = lista_aux[0].split()
+        
+        numero = int(lista[0])
+        data_old = lista[1]
+        data_atual = getDate()
+
+        numero += 1
+
+        if data_atual['dt'] != data_old:
+                numero = 1
+                
+        if len(str(numero)) == 1:
+                novo_numero = '0' + str(numero)
+        else:
+                novo_numero = str(numero)
+
+        novo_valor_arquivo = novo_numero + ' ' + data_atual['dt'] + ' *'
+        arquivo_escrita = open("numeracao.txt","w")
+        arquivo_escrita.write(novo_valor_arquivo)
+        arquivo_escrita.close()
+
+        return novo_numero
+
+def getIdentificacao():
+        nome = platform.node()
+        return nome
+
 flag = 0
 
 #-------------------------------------------------------------------------------#
-servo = configServo()
 
-pwm = configPinoGpio(servo['pino'],servo['frequencia'], 1)
-pwm.start(0)
+def main():
+        
+	servo = configServo()
 
-pulso = calcularPulso(servo['frequencia'], servo['pulso_0'], servo['pulso_180'])
+	pwm = configPinoGpio(servo['pino'],servo['frequencia'], 1)
+	pwm.start(0)
 
-dados = ""
+	pulso = calcularPulso(servo['frequencia'], servo['pulso_0'], servo['pulso_180'])
+	
+	lcd = inicializaLCD()
 
-flag = 0
+	html = '''
+        <table id="tabela">
+            <tbody>
+                <tr class="cabecalho1" style="background: #f46242;height:40px;width: 100%">
+                    <td colspan="2">Identificação:&nbsp;
+        '''
+	dadosDin = ""
+	
+	flag = 0
 
-while 1:
+	qtd_registros = 0
 
-	try:
-		#Recebe os dados do sensor de temperatura
-		
-		dados += sock.recv(1024)
-		data_end = dados.find('\n')
-		
-		mensagem = ""
-		mensagemBackup = ""
-		
+	while 1:
 
-		if (data_end != -1):
+		try:
+			sock = conectar(lcd)
+			message = "Get"
+			sock.send((message).encode())
+
+			dados = ""      
+
+			#Recebe os dados do sensor de temperatura
+			while len(dados) < 17:
+					dados += (sock.recv(1)).decode()
+
+			sock.close()
+			
+			if (len(dados) == 17):
+									
+				temp        = dados.split()
+				temperatura = float(temp[0])
+	
+				dt = getDate()
+				
+				print (dados)
+				lcd.clear()
+				lcd.message("   TEMPERATURA \n" + str(round(temperatura,2)) + "C " + str(dt['ht']))
+
+				flag += 1
+                                
+				if flag == 1:
+					relatorio = headerRelatorio()
+
+				dadosDin += '<tr><td>' + str(dt['dt']) + '</td>'
+				dadosDin += '<td>' + str(dt['ht']) + '</td>'
+				dadosDin += '<td>' + str(temp[0]) + '</td>'
+				dadosDin += '<td>' + str(temp[1]) + '</td>'
+				dadosDin += '<td>' + str(temp[2]) + '</td></tr>'
+
+				qtd_registros += 1                                              
+                                        
+				if qtd_registros == 30:
+
+					identificacao = getIdentificacao()
+					n_relatorio = numeracao()
+
+					html += identificacao
+					html += '</td><td colspan="2">Relatório: nº'
+					html += n_relatorio
+					html += '</td><td>Data:'
+					html += str(dt['dt'])
+					html += '''
+					</td>     
+					</tr><tr class="cabecalho2">
+							<td>Data</td>
+							<td>Horário</td>
+							<td>°C</td>
+							<td>Máx. °C</td>
+							<td>Min. °C</td>
+					</tr>
+					'''
+					html += dadosDin
+					html += '''
+						</tbody>
+						</table>
+						<div class="row" style="text-align: right;font-size: 11px; ">
+							<p><i><u>ReportTemperature version:1.0.1</u></i></p>
+						</div>
+					'''
+
+					if geraRelatorio(html,relatorio):
+							print ('Falhou')
+					else:
+							print ('Sucesso')
 					
-			if (int(len(dados)) != 43):
-				
-				dados = dados[data_end+1:]
-				continue
-			
-			temp        = dados.split()
-			temperatura = int(temp[2])
-			
-			print dados
+					html = ""
+					dadosDin = ""
 
-			dt = getDate()
+					html = '''
+					<table id="tabela">
+							<tbody>
+							<tr class="cabecalho1" style="background: #f46242;height:40px;width: 100%">
+									<td colspan="2">Identificação:&nbsp;
+					'''
+					
+					relatorio = headerRelatorio()
+					qtd_registros = 0
+                                
+				if temperatura > 26:
+						
+					set_angulo(pwm, 15, pulso['taxa_0'], pulso['taxa_range'])
+					#while dec_angulo > 15:
+						#     set_angulo(pwm, 15, pulso['taxa_0'], pulso['taxa_range'])
+						#    dec_angulo = dec_angulo-15
+						#   sleep(1.5)
+				
+				else:
+					set_angulo(pwm, 90, pulso['taxa_0'], pulso['taxa_range'])
+                                        
+			sleep(5)
+                                
+		except KeyboardInterrupt:
+			lcd.clear()           
+			print("Encerrando...")
+			lcd.message(" ENCERRANDO.... ")
+			pwm.stop()
+			sock.close()
+			sleep(5)
+			lcd.clear()
+			configPinoGpio(servo['pino'], servo['frequencia'], 0)
 			
-			flag += 1
-			
-			if flag == 1:
-				
-				tempoAnterior = dt['minuto']
-				
-				relatorio = headerRelatorio()
-				rel_arq   = relatorio + 'txt'
-				
-				arquivoDados = open(rel_arq,"a")
-				
-				arquivoDados.write(relatorio)
-				
-			
-			tempoAtual = dt['minuto']
-			
-			if tempoAtual != tempoAnterior:
-				
-				arquivoDados.close()
-				
-				relatorio = headerRelatorio()
-				rel_arq   = relatorio + '.txt'
-				
-				arquivoDados = open(rel_arq,"a")
-				
-				arquivoDados.write(relatorio)
-				
-				tempoAnterior = tempoAtual
-
-			mensagemBackup += (dt['dt'] + ' - ' + dados)
-			arquivoDados.write(mensagemBackup)
-			
-			if temperatura > 26:
-				
-				set_angulo(pwm, 0, pulso['taxa_0'], pulso['taxa_range'])
-			
-			else:
-				
-				set_angulo(pwm, 80, pulso['taxa_0'], pulso['taxa_range'])
-				
-			
-			dados = dados[data_end+1:]
-			
-	except KeyboardInterrupt:
-		
-		pwm.stop()
-		configPinoGpio(servo['pino'], servo['frequencia'], 0)
-		arquivoDados.close()
-		sock.close()
-		
-		break
-
+			break
+	
+if __name__== "__main__":
+    main()
